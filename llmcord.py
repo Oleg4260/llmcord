@@ -34,6 +34,9 @@ def get_config(filename="config.yaml"):
 
 config = get_config()
 
+promptfile = open("prompt.txt", "r")
+system_prompt = promptfile.read()
+
 bot_token = config["bot_token"]
 
 if client_id := config["client_id"]:
@@ -125,7 +128,7 @@ async def on_message(new_msg):
 
         async with curr_node.lock:
             if curr_node.text == None:
-                cleaned_content = curr_msg.content.removeprefix(discord_client.user.mention).lstrip()
+                cleaned_content = curr_msg.author.name + ": " + curr_msg.content.removeprefix(discord_client.user.mention).lstrip() # Message content
 
                 good_attachments = [att for att in curr_msg.attachments if att.content_type and any(att.content_type.startswith(x) for x in ("text", "image"))]
 
@@ -197,13 +200,10 @@ async def on_message(new_msg):
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
 
-    if system_prompt := config["system_prompt"]:
-        system_prompt_extras = [f"Today's date: {dt.now().strftime('%B %d %Y')}."]
-        if accept_usernames:
-            system_prompt_extras.append("User's names are their Discord IDs and should be typed as '<@ID>'.")
+    system_prompt_extras = [f"Today's date: {dt.now().strftime('%B %d %Y')}."]
 
-        full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
-        messages.append(dict(role="system", content=full_system_prompt))
+    full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
+    messages.append(dict(role="system", content=full_system_prompt))
 
     # Generate and send response message(s) (can be multiple if response is long)
     curr_content = finish_reason = edit_task = None
@@ -274,8 +274,10 @@ async def on_message(new_msg):
                     msg_nodes[response_msg.id] = MsgNode(parent_msg=new_msg)
                     await msg_nodes[response_msg.id].lock.acquire()
 
-    except Exception:
+    except Exception as e: # Catch the exception and assign it to variable 'e'
         logging.exception("Error while generating response")
+        error_message = f"API error:\n`{e}`"
+        await new_msg.reply(content=error_message, suppress_embeds=True)
 
     for response_msg in response_msgs:
         msg_nodes[response_msg.id].text = "".join(response_contents)
