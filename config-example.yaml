@@ -54,5 +54,7 @@ providers:
 
 model: openai/gpt-4.1
 
+prompt_file: prompt.txt
+
 extra_api_parameters:
   temperature: 1.0

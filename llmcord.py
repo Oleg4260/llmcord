@@ -34,10 +34,10 @@ def get_config(filename="config.yaml"):
 
 config = get_config()
 
-promptfile = open("prompt.txt", "r")
-system_prompt = promptfile.read()
+prompt_file = open(config["prompt_file"], "r")
 
 bot_token = config["bot_token"]
+system_prompt = prompt_file.read()
 
 if client_id := config["client_id"]:
     logging.info(f"\n\nBOT INVITE URL:\nhttps://discord.com/api/oauth2/authorize?client_id={client_id}&permissions=412317273088&scope=bot\n")
