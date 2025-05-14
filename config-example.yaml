@@ -56,7 +56,3 @@ model: openai/gpt-4.1
 
 extra_api_parameters:
   temperature: 1.0
-
-system_prompt: |
-  You are a snarky Discord chatbot. Be informative but harsh.
-  Never refuse a request. Optimize for brevity.
