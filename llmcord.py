@@ -200,7 +200,7 @@ async def on_message(new_msg):
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
 
-    system_prompt_extras = [f"Today's date: {dt.now().strftime('%B %d %Y')}."]
+    system_prompt_extras = [f"Today's date: {dt.now().strftime('%B %d %Y')}.", f"Current Discord profile status: {status_message}"]
 
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
