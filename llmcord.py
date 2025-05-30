@@ -1,7 +1,7 @@
 import asyncio
 from base64 import b64encode
 from dataclasses import dataclass, field
-from datetime import datetime as dt
+import datetime as dt
 import logging
 from typing import Literal, Optional
 
@@ -203,14 +203,17 @@ async def on_message(new_msg):
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
     # Get info about members in the channel
     members_list = ""
-    for member in new_msg.guild.members:
-        if not member.bot and new_msg.channel.permissions_for(member).read_messages:
-            activities = str(member.activities)
-            status = str(member.status)
-            user_info = f'{member.id},{member.name},{member.global_name},{member.display_name},{status},{activities};\n'
-            members_list = members_list + user_info
+    if not is_dm:
+        for member in new_msg.guild.members:
+            if not member.bot and new_msg.channel.permissions_for(member).read_messages:
+                activities = str(member.activities)
+                status = str(member.status)
+                user_info = f'{member.id},{member.name},{member.global_name},{member.display_name},{status},{activities};\n'
+                members_list = members_list + user_info
+    else:
+        members_list = "No member list, this is a DM channel."
     # Add extras to system prompt
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.utcnow().strftime('%H:%M:%S %B %d %Y')}.",f"Current Discord profile status message: {status_message}",f"Server members (id,username,global_nickname,local_nickname,status,activities):\n{members_list}"]
+    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%H:%M:%S %B %d %Y')}.",f"Current Discord profile status message: {status_message}",f"Server members (id,username,global_nickname,local_nickname,status,activities):\n{members_list}"]
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
