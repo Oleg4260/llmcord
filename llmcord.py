@@ -207,10 +207,10 @@ async def on_message(new_msg):
         if not member.bot and new_msg.channel.permissions_for(member).read_messages:
             activities = str(member.activities)
             status = str(member.status)
-            user_info = f'{member.name},{member.id},{status},{activities};\n'
+            user_info = f'{member.id},{member.name},{member.global_name},{member.display_name},{status},{activities};\n'
             members_list = members_list + user_info
     # Add extras to system prompt
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.utcnow().strftime('%H:%M:%S %B %d %Y')}.", f"Current Discord profile status message: {status_message}",f"Server members (username,id,status,activities):\n{members_list}"]
+    system_prompt_extras = [f"Current date and time (UTC+0): {dt.utcnow().strftime('%H:%M:%S %B %d %Y')}.",f"Current Discord profile status message: {status_message}",f"Server members (id,username,global_nickname,local_nickname,status,activities):\n{members_list}"]
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
