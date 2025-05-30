@@ -46,6 +46,8 @@ status_message = config["status_message"] or "github.com/jakobdylanc/llmcord"
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
+intents.presences = True
 activity = discord.CustomActivity(name=status_message[:128])
 discord_client = discord.Client(intents=intents, activity=activity)
 
@@ -199,12 +201,22 @@ async def on_message(new_msg):
             curr_msg = curr_node.parent_msg
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
-
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.utcnow().strftime('%H:%M:%S %B %d %Y')}.", f"Current Discord profile status: {status_message}"]
-
+    # Get info about members in the channel
+    members_list = ""
+    for member in new_msg.guild.members:
+        if not member.bot and new_msg.channel.permissions_for(member).read_messages:
+            activity_name = "No activity"
+            for activity in member.activities:
+                if isinstance(activity, discord.CustomActivity) and activity.name:
+                    activity_name = activity.name
+                    break
+            status = str(member.status)
+            user_info = f'{member.name},{member.id},{status},{activity_name};\n'
+            members_list = members_list + user_info
+    # Add extras to system prompt
+    system_prompt_extras = [f"Current date and time (UTC+0): {dt.utcnow().strftime('%H:%M:%S %B %d %Y')}.", f"Current Discord profile status message: {status_message}",f"Server members (username,id,status,activity):\n{members_list}"]
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
-
     # Generate and send response message(s) (can be multiple if response is long)
     curr_content = finish_reason = edit_task = None
     response_msgs = []
