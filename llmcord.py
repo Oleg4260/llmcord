@@ -205,16 +205,12 @@ async def on_message(new_msg):
     members_list = ""
     for member in new_msg.guild.members:
         if not member.bot and new_msg.channel.permissions_for(member).read_messages:
-            activity_name = "No activity"
-            for activity in member.activities:
-                if isinstance(activity, discord.CustomActivity) and activity.name:
-                    activity_name = activity.name
-                    break
+            activities = str(member.activities)
             status = str(member.status)
-            user_info = f'{member.name},{member.id},{status},{activity_name};\n'
+            user_info = f'{member.name},{member.id},{status},{activities};\n'
             members_list = members_list + user_info
     # Add extras to system prompt
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.utcnow().strftime('%H:%M:%S %B %d %Y')}.", f"Current Discord profile status message: {status_message}",f"Server members (username,id,status,activity):\n{members_list}"]
+    system_prompt_extras = [f"Current date and time (UTC+0): {dt.utcnow().strftime('%H:%M:%S %B %d %Y')}.", f"Current Discord profile status message: {status_message}",f"Server members (username,id,status,activities):\n{members_list}"]
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
