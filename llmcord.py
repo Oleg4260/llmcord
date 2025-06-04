@@ -205,7 +205,7 @@ async def on_message(new_msg):
     members_list = ""
     if not is_dm:
         for member in new_msg.guild.members:
-            if not member.bot and new_msg.channel.permissions_for(member).read_messages:
+            if new_msg.channel.permissions_for(member).read_messages:
                 activities = str(member.activities)
                 status = str(member.status)
                 created_at = str(member.created_at)
@@ -219,7 +219,7 @@ async def on_message(new_msg):
     else:
         members_list = "No member list, this is a DM channel."
     # Add extras to system prompt
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}.",f"Current Discord profile status message: {status_message}",f"Server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}"]
+    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}.",f"Server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}"]
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
