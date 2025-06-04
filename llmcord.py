@@ -258,7 +258,7 @@ async def on_message(new_msg):
                 response_contents[-1] += new_content
 
                 if not use_plain_responses:
-                    ready_to_edit = (edit_task == None or edit_task.done()) and dt.now().timestamp() - last_task_time >= EDIT_DELAY_SECONDS
+                    ready_to_edit = (edit_task == None or edit_task.done()) and dt.datetime.now().timestamp() - last_task_time >= EDIT_DELAY_SECONDS
                     msg_split_incoming = finish_reason == None and len(response_contents[-1] + curr_content) > max_message_length
                     is_final_edit = finish_reason != None or msg_split_incoming
                     is_good_finish = finish_reason != None and finish_reason.lower() in ("stop", "end_turn")
@@ -280,7 +280,7 @@ async def on_message(new_msg):
                         else:
                             edit_task = asyncio.create_task(response_msgs[-1].edit(embed=embed))
 
-                        last_task_time = dt.now().timestamp()
+                        last_task_time = dt.datetime.now().timestamp()
 
             if use_plain_responses:
                 for content in response_contents:
