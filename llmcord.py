@@ -130,7 +130,7 @@ async def on_message(new_msg):
 
         async with curr_node.lock:
             if curr_node.text == None:
-                cleaned_content = curr_msg.author.name + ": " + curr_msg.content.removeprefix(discord_client.user.mention).lstrip() # Message content
+                cleaned_content = curr_msg.created_at.strftime('%d.%m.%Y %H:%M ') + curr_msg.author.name + ": " + curr_msg.content.removeprefix(discord_client.user.mention).lstrip() # Message content
 
                 good_attachments = [att for att in curr_msg.attachments if att.content_type and any(att.content_type.startswith(x) for x in ("text", "image"))]
 
@@ -219,7 +219,7 @@ async def on_message(new_msg):
     else:
         members_list = "No member list, this is a DM channel."
     # Add extras to system prompt
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%H:%M:%S %B %d %Y')}.",f"Current Discord profile status message: {status_message}",f"Server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}"]
+    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}.",f"Current Discord profile status message: {status_message}",f"Server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}"]
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
