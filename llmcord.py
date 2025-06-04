@@ -18,12 +18,6 @@ logging.basicConfig(
 VISION_MODEL_TAGS = ("gpt-4", "o3", "o4", "claude", "gemini", "gemma", "llama", "pixtral", "mistral", "vision", "vl")
 PROVIDERS_SUPPORTING_USERNAMES = ("openai", "x-ai")
 
-EMBED_COLOR_COMPLETE = discord.Color.dark_green()
-EMBED_COLOR_INCOMPLETE = discord.Color.orange()
-
-STREAMING_INDICATOR = " ⚪"
-EDIT_DELAY_SECONDS = 1
-
 MAX_MESSAGE_NODES = 500
 
 
@@ -138,7 +132,6 @@ async def on_message(new_msg):
 
                 curr_node.text = "\n".join(
                     ([cleaned_content] if cleaned_content else [])
-                    + ["\n".join(filter(None, (embed.title, embed.description, embed.footer.text))) for embed in curr_msg.embeds]
                     + [resp.text for att, resp in zip(good_attachments, attachment_responses) if att.content_type.startswith("text")]
                 )
 
@@ -227,14 +220,9 @@ async def on_message(new_msg):
     response_msgs = []
     response_contents = []
 
-    embed = discord.Embed()
-    for warning in sorted(user_warnings):
-        embed.add_field(name=warning, value="", inline=False)
-
-    use_plain_responses = config["use_plain_responses"]
     extra_api_parameters = config["extra_api_parameters"]
 
-    max_message_length = 2000 if use_plain_responses else (4096 - len(STREAMING_INDICATOR))
+    max_message_length = 2000
 
     try:
         async with new_msg.channel.typing():
@@ -257,39 +245,13 @@ async def on_message(new_msg):
 
                 response_contents[-1] += new_content
 
-                if not use_plain_responses:
-                    ready_to_edit = (edit_task == None or edit_task.done()) and dt.datetime.now().timestamp() - last_task_time >= EDIT_DELAY_SECONDS
-                    msg_split_incoming = finish_reason == None and len(response_contents[-1] + curr_content) > max_message_length
-                    is_final_edit = finish_reason != None or msg_split_incoming
-                    is_good_finish = finish_reason != None and finish_reason.lower() in ("stop", "end_turn")
+            for content in response_contents:
+                reply_to_msg = new_msg if response_msgs == [] else response_msgs[-1]
+                response_msg = await reply_to_msg.reply(content=content, suppress_embeds=True)
+                response_msgs.append(response_msg)
 
-                    if start_next_msg or ready_to_edit or is_final_edit:
-                        if edit_task != None:
-                            await edit_task
-
-                        embed.description = response_contents[-1] if is_final_edit else (response_contents[-1] + STREAMING_INDICATOR)
-                        embed.color = EMBED_COLOR_COMPLETE if msg_split_incoming or is_good_finish else EMBED_COLOR_INCOMPLETE
-
-                        if start_next_msg:
-                            reply_to_msg = new_msg if response_msgs == [] else response_msgs[-1]
-                            response_msg = await reply_to_msg.reply(embed=embed, silent=True)
-                            response_msgs.append(response_msg)
-
-                            msg_nodes[response_msg.id] = MsgNode(parent_msg=new_msg)
-                            await msg_nodes[response_msg.id].lock.acquire()
-                        else:
-                            edit_task = asyncio.create_task(response_msgs[-1].edit(embed=embed))
-
-                        last_task_time = dt.datetime.now().timestamp()
-
-            if use_plain_responses:
-                for content in response_contents:
-                    reply_to_msg = new_msg if response_msgs == [] else response_msgs[-1]
-                    response_msg = await reply_to_msg.reply(content=content, suppress_embeds=True)
-                    response_msgs.append(response_msg)
-
-                    msg_nodes[response_msg.id] = MsgNode(parent_msg=new_msg)
-                    await msg_nodes[response_msg.id].lock.acquire()
+                msg_nodes[response_msg.id] = MsgNode(parent_msg=new_msg)
+                await msg_nodes[response_msg.id].lock.acquire()
 
     except Exception as e: # Catch the exception and assign it to variable 'e'
         logging.exception("Error while generating response")
