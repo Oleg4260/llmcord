@@ -212,7 +212,7 @@ async def on_message(new_msg):
     else:
         members_list = "No member list, this is a DM channel."
     # Add extras to system prompt
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}.",f"Server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}"]
+    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}.",f"Server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}",f"Custom emojis: {str(discord_client.emojis)}"]
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
