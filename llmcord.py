@@ -132,6 +132,7 @@ async def on_message(new_msg):
 
                 curr_node.text = "\n".join(
                     ([cleaned_content] if cleaned_content else [])
+                    + ["\n".join(filter(None, (embed.title, embed.description, embed.footer.text))) for embed in curr_msg.embeds]
                     + [resp.text for att, resp in zip(good_attachments, attachment_responses) if att.content_type.startswith("text")]
                 )
 
