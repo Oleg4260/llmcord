@@ -211,10 +211,16 @@ async def on_message(new_msg):
                 roles_list.pop(0) # Remove @everyone
                 user_info = f'{member.id},{member.name},{member.display_name},{member.global_name},{status},{activities},{roles_list},{created_at},{joined_at};\n'
                 members_list = members_list + user_info
-    else:
-        members_list = "No member list, this is a DM channel."
     # Add extras to system prompt
-    system_prompt_extras = [f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}.",f"Server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}",f"Custom emojis: {str(discord_client.emojis)}"]
+    system_prompt_extras = [
+        f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}",
+        f"Custom emojis available: {str(discord_client.emojis)}"
+        ]
+    if not is_dm:
+        system_prompt_extras.append(f"Current server name: {new_msg.guild.name}, Current channel name: {new_msg.channel.name}")
+        system_prompt_extras.append(f"Current list of server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}")
+    else:
+        system_prompt_extras.append("You are currently in a DM channel.")
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
