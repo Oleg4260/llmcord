@@ -44,6 +44,7 @@ intents.members = True
 intents.presences = True
 activity = discord.CustomActivity(name=status_message[:128])
 discord_client = discord.Client(intents=intents, activity=activity)
+tree = discord.app_commands.CommandTree(discord_client)
 
 httpx_client = httpx.AsyncClient()
 
@@ -65,6 +66,33 @@ class MsgNode:
     parent_msg: Optional[discord.Message] = None
 
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+@discord_client.event
+async def on_ready():
+    logging.info(f"Logged in as {discord_client.user}")
+    await tree.sync()
+    logging.info("Commands synced.")
+
+@tree.command(name="clear", description="Deletes all of the bot's messages in the current DM channel.")
+async def clear(interaction: discord.Interaction):
+    """Deletes all of the bot's messages in the current DM channel."""
+    if interaction.channel.type != discord.ChannelType.private:
+        await interaction.response.send_message("This command can only be used in DMs.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    
+    deleted_count = 0
+    async for message in interaction.channel.history(limit=None):
+        if message.author == discord_client.user:
+            try:
+                await message.delete()
+                deleted_count += 1
+            except discord.HTTPException as e:
+                logging.error(f"Failed to delete message {message.id}: {e}")
+
+    await interaction.followup.send(f"Successfully deleted {deleted_count} bot message(s).")
 
 
 @discord_client.event
