@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 import datetime as dt
 import logging
 from typing import Literal, Optional
-
 import discord
 import httpx
 from openai import AsyncOpenAI
 import yaml
+import dokuwiki as wiki
 
 logging.basicConfig(
     level=logging.INFO,
@@ -249,6 +249,10 @@ async def on_message(new_msg):
         system_prompt_extras.append(f"Current list of server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}")
     else:
         system_prompt_extras.append("You are currently in a DM channel.")
+    # Add content from wiki
+    if config["use_wiki"]:
+        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
+        system_prompt_extras.append(f"Content of all wiki pages: {wiki_data}")
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
     # Generate and send response message(s) (can be multiple if response is long)
