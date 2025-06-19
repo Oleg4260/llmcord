@@ -1,7 +1,6 @@
 # Discord settings:
 
 bot_token: 
-client_id: 
 status_message: 
 
 max_text: 100000

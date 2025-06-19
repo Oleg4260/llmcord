@@ -20,7 +20,6 @@ PROVIDERS_SUPPORTING_USERNAMES = ("openai", "x-ai")
 
 MAX_MESSAGE_NODES = 500
 
-
 def get_config(filename="config.yaml"):
     with open(filename, "r") as file:
         return yaml.safe_load(file)
@@ -33,10 +32,7 @@ prompt_file = open(config["prompt_file"], "r")
 bot_token = config["bot_token"]
 system_prompt = prompt_file.read()
 
-if client_id := config["client_id"]:
-    logging.info(f"\n\nBOT INVITE URL:\nhttps://discord.com/api/oauth2/authorize?client_id={client_id}&permissions=412317273088&scope=bot\n")
-
-status_message = config["status_message"] or "github.com/jakobdylanc/llmcord"
+status_message = config["status_message"] or "github.com/Oleg4260/llmcord"
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -50,7 +46,7 @@ httpx_client = httpx.AsyncClient()
 
 msg_nodes = {}
 last_task_time = 0
-
+wiki_data = []
 
 @dataclass
 class MsgNode:
@@ -70,6 +66,10 @@ class MsgNode:
 
 @discord_client.event
 async def on_ready():
+    global wiki_data
+    if config["use_wiki"]:
+        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
+        logging.info(f"Wiki data received, {len(wiki_data)} articles downloaded.")
     logging.info(f"Logged in as {discord_client.user}")
     await tree.sync()
     logging.info("Commands synced.")
@@ -97,7 +97,14 @@ async def clear(interaction: discord.Interaction):
 
 @discord_client.event
 async def on_message(new_msg):
-    global msg_nodes, last_task_time
+    global msg_nodes, last_task_time, wiki_data
+
+    config = await asyncio.to_thread(get_config)
+
+    if config["use_wiki"] and new_msg.author.id == config["webhook_id"]:
+        logging.info("Webhook message received, updating wiki data")
+        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
+        logging.info(f"Wiki data received, {len(wiki_data)} articles downloaded.")
 
     is_dm = new_msg.channel.type == discord.ChannelType.private
 
@@ -106,8 +113,6 @@ async def on_message(new_msg):
 
     role_ids = set(role.id for role in getattr(new_msg.author, "roles", ()))
     channel_ids = set(filter(None, (new_msg.channel.id, getattr(new_msg.channel, "parent_id", None), getattr(new_msg.channel, "category_id", None))))
-
-    config = await asyncio.to_thread(get_config)
 
     allow_dms = config["allow_dms"]
     permissions = config["permissions"]
@@ -251,7 +256,6 @@ async def on_message(new_msg):
         system_prompt_extras.append("You are currently in a DM channel.")
     # Add content from wiki
     if config["use_wiki"]:
-        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
         system_prompt_extras.append(f"Content of all wiki pages: {wiki_data}")
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
