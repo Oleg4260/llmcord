@@ -230,20 +230,25 @@ async def on_message(new_msg):
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
     # Get info about members in the channel
-    members_list = ""
+    members_list = []
     if not is_dm:
         for member in new_msg.guild.members:
             if new_msg.channel.permissions_for(member).read_messages:
-                activities = str(member.activities)
-                status = str(member.status)
-                created_at = str(member.created_at)
-                joined_at = str(member.joined_at)
-                roles_list = []
-                for role in member.roles:
-                    roles_list.append(f"{role.name},{role.id}")
-                roles_list.pop(0) # Remove @everyone
-                user_info = f'{member.id},{member.name},{member.display_name},{member.global_name},{status},{activities},{roles_list},{created_at},{joined_at};\n'
-                members_list = members_list + user_info
+                member_info = {
+                    "id":member.id,
+                    "name":member.name,
+                    "display_name":member.display_name,
+                    "global_name":member.global_name,
+                    "status": str(member.status),
+                    "activities": [str(activity) for activity in member.activities],
+                    "roles": [
+                        {"name":role.name, "id":role.id, "color":str(role.color)}
+                        for role in member.roles[1:] # Remove @everyone
+                    ],
+                    "created_at":str(member.created_at),
+                    "joined_at":str(member.joined_at)
+                }
+                members_list.append(member_info)
     # Add extras to system prompt
     system_prompt_extras = [
         f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}",
@@ -251,7 +256,7 @@ async def on_message(new_msg):
         ]
     if not is_dm:
         system_prompt_extras.append(f"Current server name: {new_msg.guild.name}, Current channel name: {new_msg.channel.name}")
-        system_prompt_extras.append(f"Current list of server members (id,username,display_name,global_name,status,activities,roles_list(name,id),created_at,joined_at;):\n{members_list}")
+        system_prompt_extras.append(f"Current members in the channel: {members_list}")
     else:
         system_prompt_extras.append("You are currently in a DM channel.")
     # Add content from wiki
@@ -312,9 +317,7 @@ async def on_message(new_msg):
             async with msg_nodes.setdefault(msg_id, MsgNode()).lock:
                 msg_nodes.pop(msg_id, None)
 
-
 async def main():
     await discord_client.start(bot_token)
-
 
 asyncio.run(main())
