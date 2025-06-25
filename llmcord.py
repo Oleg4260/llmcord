@@ -233,6 +233,7 @@ async def on_message(new_msg):
 
             if not chain_ended and not is_dm and config["read_history"] and curr_node.parent_msg is None:
                 chain_ended = True
+                messages.append(dict(role="system", content="Channel history ends here. Current message chain starts below."))
 
             if chain_ended and len(messages) < max_messages:
                 if not channel_history:
