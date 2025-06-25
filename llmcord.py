@@ -201,12 +201,22 @@ async def on_message(new_msg):
 
                         if parent_msg_id := curr_msg.channel.id if parent_is_thread_start else getattr(curr_msg.reference, "message_id", None):
                             if parent_is_thread_start:
-                                curr_node.parent_msg = curr_msg.channel.starter_message or await curr_msg.channel.parent.fetch_message(parent_msg_id)
+                                try:
+                                    curr_node.parent_msg = curr_msg.channel.starter_message or await curr_msg.channel.parent.fetch_message(parent_msg_id)
+                                except discord.NotFound:
+                                    logging.warning(f"Thread starter message {parent_msg_id} not found")
+                                    curr_node.parent_msg = None
+                                    curr_node.fetch_parent_failed = True
                             else:
-                                curr_node.parent_msg = curr_msg.reference.cached_message or await curr_msg.channel.fetch_message(parent_msg_id)
+                                try:
+                                    curr_node.parent_msg = curr_msg.reference.cached_message or await curr_msg.channel.fetch_message(parent_msg_id)
+                                except discord.NotFound:
+                                    logging.warning(f"Referenced message {parent_msg_id} not found")
+                                    curr_node.parent_msg = None
+                                    curr_node.fetch_parent_failed = True
 
-                except (discord.NotFound, discord.HTTPException):
-                    logging.exception("Error fetching next message in the chain")
+                except (discord.NotFound, discord.HTTPException) as e:
+                    logging.exception(f"Error fetching parent message: {e}")
                     curr_node.fetch_parent_failed = True
 
             if curr_node.images[:max_images]:
@@ -221,7 +231,7 @@ async def on_message(new_msg):
 
                 messages.append(message)
 
-            if not chain_ended and config["read_history"] and curr_node.parent_msg is None:
+            if not chain_ended and not is_dm and config["read_history"] and curr_node.parent_msg is None:
                 chain_ended = True
 
             if chain_ended and len(messages) < max_messages:
