@@ -8,6 +8,7 @@ max_images: 5
 max_messages: 25
 
 allow_dms: true
+read_history: true
 
 permissions:
   users:

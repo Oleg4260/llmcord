@@ -147,8 +147,12 @@ async def on_message(new_msg):
     max_images = config["max_images"] if accept_images else 0
     max_messages = config["max_messages"]
 
+    attachment_whitelist = ("text", "image") if accept_images else ("text")
+
     # Build message chain and set user warnings
     messages = []
+    channel_history = []
+    chain_ended = False
     user_warnings = set()
     curr_msg = new_msg
 
@@ -160,7 +164,7 @@ async def on_message(new_msg):
                 cleaned_content = curr_msg.content.removeprefix(discord_client.user.mention).lstrip()
                 formatted_message = curr_msg.created_at.strftime('%d.%m.%Y %H:%M ') + curr_msg.author.name + ": " + cleaned_content
 
-                good_attachments = [att for att in curr_msg.attachments if att.content_type and any(att.content_type.startswith(x) for x in ("text", "image"))]
+                good_attachments = [att for att in curr_msg.attachments if att.content_type and any(att.content_type.startswith(x) for x in attachment_whitelist)]
 
                 attachment_responses = await asyncio.gather(*[httpx_client.get(att.url) for att in good_attachments])
 
@@ -217,6 +221,15 @@ async def on_message(new_msg):
 
                 messages.append(message)
 
+            if not chain_ended and config["read_history"] and curr_node.parent_msg is None:
+                chain_ended = True
+
+            if chain_ended and len(messages) < max_messages:
+                if not channel_history:
+                    channel_history = [msg async for msg in curr_msg.channel.history(before=curr_msg, limit=max_messages - len(messages))]
+                curr_node.parent_msg = channel_history[0]
+                del channel_history[0]
+            
             if len(curr_node.text) > max_text:
                 user_warnings.add(f"⚠️ Max {max_text:,} characters per message")
             if len(curr_node.images) > max_images:
