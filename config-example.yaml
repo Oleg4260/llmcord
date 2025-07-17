@@ -3,6 +3,8 @@
 bot_token: 
 status_message: 
 
+timezone: "Europe/Kyiv"
+
 max_text: 100000
 max_images: 5
 max_messages: 25

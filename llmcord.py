@@ -2,6 +2,7 @@ import asyncio
 from base64 import b64encode
 from dataclasses import dataclass, field
 import datetime as dt
+from zoneinfo import ZoneInfo
 import logging
 from typing import Literal, Optional
 import discord
@@ -28,6 +29,8 @@ def get_config(filename="config.yaml"):
 config = get_config()
 
 prompt_file = open(config["prompt_file"], "r")
+
+timezone = ZoneInfo(config["timezone"])
 
 bot_token = config["bot_token"]
 system_prompt = prompt_file.read()
@@ -162,7 +165,8 @@ async def on_message(new_msg):
         async with curr_node.lock:
             if curr_node.text == None:
                 cleaned_content = curr_msg.content.removeprefix(discord_client.user.mention).lstrip()
-                formatted_message = curr_msg.created_at.strftime('%d.%m.%Y %H:%M ') + curr_msg.author.name + ": " + cleaned_content
+                msg_date_local = curr_msg.created_at.replace(tzinfo=dt.UTC).astimezone(timezone)
+                formatted_message = f"{msg_date_local.strftime('%d.%m.%Y %H:%M')} {curr_msg.author.name}: " + cleaned_content
 
                 good_attachments = [att for att in curr_msg.attachments if att.content_type and any(att.content_type.startswith(x) for x in attachment_whitelist)]
 
@@ -228,12 +232,11 @@ async def on_message(new_msg):
                 message = dict(content=content, role=curr_node.role)
                 if accept_usernames and curr_node.user_id != None:
                     message["name"] = str(curr_node.user_id)
-
                 messages.append(message)
 
             if not chain_ended and not is_dm and config["read_history"] and curr_node.parent_msg is None:
                 chain_ended = True
-                messages.append(dict(role="system", content="Channel history ends here. Current message chain starts below."))
+                messages.append(dict(role="system", content="Channel history ends here. Current message chain starts below. (Only next messages are related to the current topic.)"))
 
             if chain_ended and len(messages) < max_messages:
                 if not channel_history:
@@ -251,6 +254,8 @@ async def on_message(new_msg):
                 user_warnings.add(f"⚠️ Only using last {len(messages)} message{'' if len(messages) == 1 else 's'}")
 
             curr_msg = curr_node.parent_msg
+    if chain_ended:
+        messages.append(dict(role="system", content=f"Latest channel history starts here. Below are the latest messages in the #{new_msg.channel.name} channel above the current message chain."))
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
     # Get info about members in the channel
@@ -275,7 +280,7 @@ async def on_message(new_msg):
                 members_list.append(member_info)
     # Add extras to system prompt
     system_prompt_extras = [
-        f"Current date and time (UTC+0): {dt.datetime.now(dt.UTC).strftime('%b %-d %Y %H:%M:%S')}",
+        f"Current date and time ({str(timezone)}): {dt.datetime.now(timezone).strftime('%b %-d %Y %H:%M:%S')}",
         f"Custom emojis available: {str(discord_client.emojis)}"
         ]
     if not is_dm:
