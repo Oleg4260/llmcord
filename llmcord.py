@@ -164,16 +164,15 @@ async def on_message(new_msg):
 
         async with curr_node.lock:
             if curr_node.text == None:
-                cleaned_content = curr_msg.content.removeprefix(discord_client.user.mention).lstrip()
                 msg_date_local = curr_msg.created_at.replace(tzinfo=dt.UTC).astimezone(timezone)
-                formatted_message = f"{msg_date_local.strftime('%d.%m.%Y %H:%M')} {curr_msg.author.name}: " + cleaned_content
+                formatted_message = f"{msg_date_local.strftime('%d.%m.%Y %H:%M')} {curr_msg.author.name}: " + curr_msg.content
 
                 good_attachments = [att for att in curr_msg.attachments if att.content_type and any(att.content_type.startswith(x) for x in attachment_whitelist)]
 
                 attachment_responses = await asyncio.gather(*[httpx_client.get(att.url) for att in good_attachments])
 
                 curr_node.text = "\n".join(
-                    ([formatted_message] if cleaned_content else [])
+                    ([formatted_message] if curr_msg.content != discord_client.user.mention else [])
                     + ["\n".join(filter(None, (embed.title, embed.description, embed.footer.text))) for embed in curr_msg.embeds]
                     + [resp.text for att, resp in zip(good_attachments, attachment_responses) if att.content_type.startswith("text")]
                 )
