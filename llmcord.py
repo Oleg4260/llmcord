@@ -235,7 +235,7 @@ async def on_message(new_msg):
 
             if not chain_ended and not is_dm and config["read_history"] and curr_node.parent_msg is None:
                 chain_ended = True
-                messages.append(dict(role="system", content="Channel history ends here. Current message chain starts below. (Only next messages are related to the current topic.)"))
+                messages.append(dict(role="system", content="Channel history ends here. Current message chain starts below. (Only next messages are related to the current topic, ignore everything before)"))
 
             if chain_ended and len(messages) < max_messages:
                 if not channel_history:
@@ -254,7 +254,7 @@ async def on_message(new_msg):
 
             curr_msg = curr_node.parent_msg
     if chain_ended:
-        messages.append(dict(role="system", content=f"Latest channel history starts here. Below are the latest messages in the #{new_msg.channel.name} channel above the current message chain."))
+        messages.append(dict(role="system", content=f"Channel history starts here. Below are the latest messages in the #{new_msg.channel.name} channel out of the current message chain."))
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
     # Get info about members in the channel
@@ -283,6 +283,8 @@ async def on_message(new_msg):
         f"Custom emojis available: {str(discord_client.emojis)}"
         ]
     if not is_dm:
+        if not config["read_history"]:
+            system_prompt_extras.append("Access to channel history is disabled. Only current message chain is visible.")
         system_prompt_extras.append(f"Current server name: {new_msg.guild.name}, Current channel name: {new_msg.channel.name}")
         system_prompt_extras.append(f"Current members in the channel: {members_list}")
     else:
