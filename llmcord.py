@@ -50,6 +50,7 @@ httpx_client = httpx.AsyncClient()
 msg_nodes = {}
 last_task_time = 0
 wiki_data = []
+history_settings = {}
 
 @dataclass
 class MsgNode:
@@ -77,7 +78,7 @@ async def on_ready():
     await tree.sync()
     logging.info("Commands synced.")
 
-@tree.command(name="clear", description="Deletes all of the bot's messages in the current DM channel.")
+@tree.command(name="clear", description="Delete all of the bot's messages in the current DM channel.")
 async def clear(interaction: discord.Interaction):
     """Deletes all of the bot's messages in the current DM channel."""
     if interaction.channel.type != discord.ChannelType.private:
@@ -97,10 +98,26 @@ async def clear(interaction: discord.Interaction):
 
     await interaction.followup.send(f"Successfully deleted {deleted_count} bot message(s).")
 
+@tree.command(name="history", description="Toggle use of channel history.")
+async def history(interaction: discord.Interaction):
+    global history_settings
+
+    user = interaction.user
+    if user.id not in history_settings:
+        history_settings[user.id] = True
+
+    await interaction.response.defer(ephemeral=True)
+    if not config["read_history"]:
+        await interaction.followup.send("Channel history is disabled in the configuration.", ephemeral=True)
+        return
+
+    history_settings[user.id] = not(history_settings[user.id])
+    await interaction.followup.send(f"Channel history {"enabled" if history_settings[user.id] else "disabled"} for user {user.name}.")
 
 @discord_client.event
 async def on_message(new_msg):
-    global msg_nodes, last_task_time, wiki_data
+
+    global msg_nodes, last_task_time, wiki_data, history_settings
 
     config = await asyncio.to_thread(get_config)
 
@@ -110,6 +127,8 @@ async def on_message(new_msg):
         logging.info(f"Wiki data received, {len(wiki_data)} articles downloaded.")
 
     is_dm = new_msg.channel.type == discord.ChannelType.private
+    if new_msg.author.id not in history_settings and config["read_history"]:
+        history_settings[new_msg.author.id] = True
 
     if (not is_dm and discord_client.user not in new_msg.mentions) or new_msg.author.bot:
         return
@@ -156,6 +175,7 @@ async def on_message(new_msg):
     messages = []
     channel_history = []
     chain_ended = False
+    history_enabled = config["read_history"] and not is_dm and history_settings[new_msg.author.id]
     user_warnings = set()
     curr_msg = new_msg
 
@@ -233,9 +253,9 @@ async def on_message(new_msg):
                     message["name"] = str(curr_node.user_id)
                 messages.append(message)
 
-            if not chain_ended and not is_dm and config["read_history"] and curr_node.parent_msg is None:
+            if history_enabled and not chain_ended and not curr_node.parent_msg:
                 chain_ended = True
-                messages.append(dict(role="system", content="Channel history ends here. Current message chain starts below. (Only next messages are related to the current topic, ignore everything before)"))
+                messages.append(dict(role="system", content="Channel history ends here. Current conversation starts from the next message. Do not refer to any previous topics unless the user does. Revert behaviour to defaults defined in the system prompt."))
 
             if chain_ended and len(messages) < max_messages:
                 if not channel_history:
@@ -253,10 +273,10 @@ async def on_message(new_msg):
                 user_warnings.add(f"⚠️ Only using last {len(messages)} message{'' if len(messages) == 1 else 's'}")
 
             curr_msg = curr_node.parent_msg
-    if chain_ended:
-        messages.append(dict(role="system", content=f"Channel history starts here. Below are the latest messages in the #{new_msg.channel.name} channel out of the current message chain."))
-
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
+    
+    if chain_ended:
+        messages.append(dict(role="system", content=f"Channel history starts here. Below are the latest messages in the #{new_msg.channel.name} channel. Ignore them unless the user directly refers to them."))
     # Get info about members in the channel
     members_list = []
     if not is_dm:
@@ -280,13 +300,13 @@ async def on_message(new_msg):
     # Add extras to system prompt
     system_prompt_extras = [
         f"Current date and time ({str(timezone)}): {dt.datetime.now(timezone).strftime('%b %-d %Y %H:%M:%S')}",
-        f"Custom emojis available: {str(discord_client.emojis)}"
+        f"Custom emojis available: {discord_client.emojis}"
         ]
     if not is_dm:
-        if not config["read_history"]:
-            system_prompt_extras.append("Access to channel history is disabled. Only current message chain is visible.")
-        system_prompt_extras.append(f"Current server name: {new_msg.guild.name}, Current channel name: {new_msg.channel.name}")
-        system_prompt_extras.append(f"Current members in the channel: {members_list}")
+        if not history_enabled:
+            system_prompt_extras.append("Access to channel history is disabled. Only current conversation is visible.")
+        system_prompt_extras.append(f"Server name: {new_msg.guild.name}, Channel name: {new_msg.channel.name}")
+        system_prompt_extras.append(f"Users in the channel: {members_list}")
     else:
         system_prompt_extras.append("You are currently in a DM channel.")
     # Add content from wiki
@@ -300,7 +320,6 @@ async def on_message(new_msg):
     response_contents = []
 
     extra_api_parameters = config["extra_api_parameters"]
-
     max_message_length = 2000
 
     try:
