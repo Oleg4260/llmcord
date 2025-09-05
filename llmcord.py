@@ -25,7 +25,6 @@ def get_config(filename="config.yaml"):
     with open(filename, "r") as file:
         return yaml.safe_load(file)
 
-
 config = get_config()
 
 prompt_file = open(config["prompt_file"], "r")
@@ -52,6 +51,14 @@ last_task_time = 0
 wiki_data = []
 history_settings = {}
 
+def download_wiki():
+    global wiki_data
+    try:
+        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
+        logging.info(f"Wiki data received, {len(wiki_data)} articles downloaded.")
+    except Exception as e:
+        logging.error(f"Could not load wiki data: {e}")
+
 @dataclass
 class MsgNode:
     text: Optional[str] = None
@@ -67,16 +74,6 @@ class MsgNode:
 
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-
-@discord_client.event
-async def on_ready():
-    global wiki_data
-    if config["use_wiki"]:
-        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
-        logging.info(f"Wiki data received, {len(wiki_data)} articles downloaded.")
-    logging.info(f"Logged in as {discord_client.user}")
-    await tree.sync()
-    logging.info("Commands synced.")
 
 @tree.command(name="clear", description="Delete all of the bot's messages in the current DM channel.")
 async def clear(interaction: discord.Interaction):
@@ -115,6 +112,15 @@ async def history(interaction: discord.Interaction):
     await interaction.followup.send(f"Channel history {"enabled" if history_settings[user.id] else "disabled"} for user {user.name}.")
 
 @discord_client.event
+async def on_ready():
+    global wiki_data
+    if config["use_wiki"]:
+        download_wiki()
+    logging.info(f"Logged in as {discord_client.user}")
+    await tree.sync()
+    logging.info("Commands synced.")
+
+@discord_client.event
 async def on_message(new_msg):
 
     global msg_nodes, last_task_time, wiki_data, history_settings
@@ -122,9 +128,8 @@ async def on_message(new_msg):
     config = await asyncio.to_thread(get_config)
 
     if config["use_wiki"] and new_msg.author.id == config["webhook_id"]:
-        logging.info("Webhook message received, updating wiki data")
-        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
-        logging.info(f"Wiki data received, {len(wiki_data)} articles downloaded.")
+        logging.info("Webhook message received, updating wiki cache")
+        download_wiki()
 
     is_dm = new_msg.channel.type == discord.ChannelType.private
     if new_msg.author.id not in history_settings and config["read_history"]:
@@ -305,7 +310,7 @@ async def on_message(new_msg):
     if not is_dm:
         if not history_enabled:
             system_prompt_extras.append("Access to channel history is disabled. Only current conversation is visible.")
-        system_prompt_extras.append(f"Server name: {new_msg.guild.name}, Channel name: {new_msg.channel.name}")
+        system_prompt_extras.append(f"Server name: {new_msg.guild.name}, Channel name: {new_msg.channel.name}, Channel topic: {new_msg.channel.topic}")
         system_prompt_extras.append(f"Users in the channel: {members_list}")
     else:
         system_prompt_extras.append("You are currently in a DM channel.")
