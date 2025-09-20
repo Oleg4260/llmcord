@@ -14,6 +14,7 @@ read_history: true
 
 permissions:
   users:
+    admin_ids: []
     allowed_ids: []
     blocked_ids: []
   roles:
@@ -23,39 +24,58 @@ permissions:
     allowed_ids: []
     blocked_ids: []
 
-
 # LLM settings:
 
 providers:
-  openai:
-    base_url: https://api.openai.com/v1
+  # Remote providers:
+  azure-openai:
+    base_url: https://<resource name>.openai.azure.com/openai/deployments/<deployment name>
     api_key: 
-  x-ai:
-    base_url: https://api.x.ai/v1
-    api_key: 
-  mistral:
-    base_url: https://api.mistral.ai/v1
+    extra_query:
+      api-version: 2024-12-01-preview
+  google:
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
     api_key: 
   groq:
     base_url: https://api.groq.com/openai/v1
     api_key: 
+  mistral:
+    base_url: https://api.mistral.ai/v1
+    api_key: 
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key: 
   openrouter:
     base_url: https://openrouter.ai/api/v1
     api_key: 
-  ollama:
-    base_url: http://localhost:11434/v1
+  x-ai:
+    base_url: https://api.x.ai/v1
+    api_key: 
+
+  # Local providers:
   lmstudio:
     base_url: http://localhost:1234/v1
+  ollama:
+    base_url: http://localhost:11434/v1
   vllm:
     base_url: http://localhost:8000/v1
-  oobabooga:
-    base_url: http://localhost:5000/v1
-  jan:
-    base_url: http://localhost:1337/v1
 
-model: openai/gpt-4.1
-
-prompt_file: prompt.txt
+models:
+  openai/gpt-5:
+    reasoning_effort: high
+    verbosity: medium
 
 extra_api_parameters:
   temperature: 1.0
+  x-ai/grok-4:
+    search_parameters:
+      mode: auto
+
+  google/gemini-2.5-pro:
+    reasoning_effort: high
+
+  openrouter/anthropic/claude-sonnet-4:
+
+  ollama/llama4:
+
+prompt_file: prompt.txt
