@@ -349,6 +349,7 @@ async def on_message(new_msg) -> None:
     # Add extras to system prompt
     system_prompt_extras = [
         f"Current date and time ({str(timezone)}): {dt.datetime.now(timezone).strftime('%b %-d %Y %H:%M:%S')}",
+        f"Current model: {curr_model}",
         f"Custom emojis available: {discord_bot.emojis}"
         ]
     if not is_dm:
