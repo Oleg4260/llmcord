@@ -330,7 +330,7 @@ async def on_message(new_msg) -> None:
     members_list = []
     if not is_dm:
         for member in new_msg.guild.members:
-            if new_msg.channel.permissions_for(member).read_messages:
+            if new_msg.channel.permissions_for(member).read_messages and (member == discord_bot.user or not member.bot):
                 member_info = {
                     "id":member.id,
                     "name":member.name,
@@ -346,11 +346,13 @@ async def on_message(new_msg) -> None:
                     "joined_at":str(member.joined_at)
                 }
                 members_list.append(member_info)
+    # Make emojis list
+    emojis_list = [f"<{"a" if e.animated else ""}:{e.name}:{e.id}>" for e in discord_bot.emojis]
     # Add extras to system prompt
     system_prompt_extras = [
         f"Current date and time ({str(timezone)}): {dt.datetime.now(timezone).strftime('%b %-d %Y %H:%M:%S')}",
         f"Current model: {curr_model}",
-        f"Custom emojis available: {discord_bot.emojis}"
+        f"Custom emojis available: {emojis_list}"
         ]
     if not is_dm:
         if not history_enabled:
