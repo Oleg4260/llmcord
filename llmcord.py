@@ -309,8 +309,10 @@ async def on_message(new_msg) -> None:
             if chain_ended and len(messages) < max_messages:
                 if not channel_history:
                     channel_history = [msg async for msg in curr_msg.channel.history(before=curr_msg, limit=max_messages - len(messages))]
-                curr_node.parent_msg = channel_history[0]
-                del channel_history[0]
+                if channel_history:
+                    curr_node.parent_msg = channel_history.pop(0)
+                else:
+                    curr_node.parent_msg = None
             
             if len(curr_node.text) > max_text:
                 user_warnings.add(f"⚠️ Max {max_text:,} characters per message")
@@ -366,6 +368,10 @@ async def on_message(new_msg) -> None:
         system_prompt_extras.append(f"Content of all wiki pages: {wiki_data}")
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
+    # Generate dump of chat history (for debug purposes)
+    #with open("history.txt", "w") as f:
+    #    for msg in messages[::-1]:
+    #        f.write(f"[{msg["role"]}]: {msg["content"]}\n")
     # Generate and send response message(s) (can be multiple if response is long)
     curr_content = finish_reason = None
     response_msgs = []
