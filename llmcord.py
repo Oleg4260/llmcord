@@ -306,7 +306,7 @@ async def on_message(new_msg) -> None:
                 chain_ended = True
                 messages.append(dict(role="system", content="Channel history ends here. Current conversation starts from the next message. Do not refer to any previous topics unless the user does. Revert behaviour to defaults defined in the system prompt."))
 
-            if chain_ended and len(messages) < max_messages:
+            if history_enabled and chain_ended and len(messages) < max_messages:
                 if not channel_history:
                     channel_history = [msg async for msg in curr_msg.channel.history(before=curr_msg, limit=max_messages - len(messages))]
                 if channel_history:
