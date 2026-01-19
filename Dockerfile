@@ -1,15 +1,26 @@
-FROM python:3.13-slim
+# Builder
+FROM python:3.13-slim AS builder
 
-ARG DEBIAN_FRONTEND=noninteractive
+WORKDIR /build
 
-WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 
-RUN apt-get update && apt-get install -y \
-    gcc python3-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Runtime
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
+COPY . .
+
+RUN useradd -m llmcord && chown -R llmcord /app
+USER llmcord
 
 CMD ["python", "llmcord.py"]
