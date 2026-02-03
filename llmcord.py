@@ -71,8 +71,6 @@ class MsgNode:
     role: Literal["user", "assistant"] = "assistant"
     user_id: Optional[int] = None
 
-    has_bad_attachments: bool = False
-
     parent_msg: Optional[discord.Message] = None
 
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -236,29 +234,33 @@ async def on_message(new_msg) -> None:
                     msg_date_local = msg.created_at
 
                 formatted_message = f"{msg_date_local.strftime('%d.%m.%Y %H:%M')} {msg.author.name}: " + (msg.content or "")
-
-                good_attachments = [att for att in msg.attachments if att.content_type and any(att.content_type.startswith(x) for x in attachment_whitelist)]
+                
+                attachments = []
+                for att in msg.attachments:
+                    if att.content_type and any(att.content_type.startswith(x) for x in attachment_whitelist):
+                        if not att.content_type.startswith("image") or len([a for a in attachments if a.content_type.startswith("image")]) < max_images:
+                            attachments.append(att)
 
                 attachment_responses = []
-                if good_attachments:
-                    attachment_responses = await asyncio.gather(*[httpx_client.get(att.url) for att in good_attachments])
+                if attachments:
+                    attachment_responses = await asyncio.gather(*[httpx_client.get(att.url) for att in attachments])
 
                 node.text = "\n".join(
                     ([formatted_message] if (msg.content and msg.content != discord_bot.user.mention) else [])
                     + ["\n".join(filter(None, (embed.title, embed.description, getattr(embed.footer, 'text', None)))) for embed in msg.embeds]
                     + [component.content for component in msg.components if getattr(component, "type", None) == discord.ComponentType.text_display]
-                    + [resp.text for att, resp in zip(good_attachments, attachment_responses) if att.content_type.startswith("text")]
+                    + [f"<{att.filename}>" for att in msg.attachments]
+                    + [resp.text for att, resp in zip(attachments, attachment_responses) if att.content_type.startswith("text")]
                 )
 
                 node.images = [
                     dict(type="image_url", image_url=dict(url=f"data:{att.content_type};base64,{b64encode(resp.content).decode('utf-8')}"))
-                    for att, resp in zip(good_attachments, attachment_responses)
+                    for att, resp in zip(attachments, attachment_responses)
                     if att.content_type.startswith("image")
                 ]
 
                 node.role = "assistant" if msg.author == discord_bot.user else "user"
                 node.user_id = msg.author.id if node.role == "user" else None
-                node.has_bad_attachments = len(msg.attachments) > len(good_attachments)
 
                 try:
                     if (
@@ -318,7 +320,6 @@ async def on_message(new_msg) -> None:
     while curr_msg is not None and len(messages) < max_messages:
         msg_dict, node = await format_message(curr_msg)
 
-
         if msg_dict:
             messages.append(msg_dict)
 
@@ -340,7 +341,7 @@ async def on_message(new_msg) -> None:
         except Exception as e:
             logging.exception(f"Error fetching channel history: {e}")
 
-    logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
+    logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{messages[0]["content"]}")
 
     # Get info about members in the channel
     members_list = []
@@ -349,7 +350,7 @@ async def on_message(new_msg) -> None:
             if new_msg.channel.permissions_for(member).read_messages and (member == discord_bot.user or not member.bot):
                 member_info = {
                     "id":member.id,
-                    "name":member.name,
+                    "username":member.name,
                     "display_name":member.display_name,
                     "global_name":member.global_name,
                     "status": str(member.status),
@@ -376,7 +377,7 @@ async def on_message(new_msg) -> None:
         system_prompt_extras.append(f"Server name: {new_msg.guild.name}, Channel name: {new_msg.channel.name}, Channel topic: {new_msg.channel.topic}")
         system_prompt_extras.append(f"Users in the channel: {members_list}")
     else:
-        system_prompt_extras.append("You are currently in a DM channel.")
+        system_prompt_extras.append(f"You are currently in a DM channel with user {new_msg.author.name}.")
     # Add content from wiki
     if config["use_wiki"]:
         system_prompt_extras.append(f"Content of all wiki pages: {wiki_data}")
