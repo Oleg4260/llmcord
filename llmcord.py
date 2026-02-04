@@ -140,7 +140,6 @@ async def model_autocomplete(interaction: discord.Interaction, curr_str: str) ->
 
     return choices[:25]
 
-
 @discord_bot.event
 async def on_ready() -> None:
     global wiki_data
@@ -249,7 +248,7 @@ async def on_message(new_msg) -> None:
                     ([formatted_message] if (msg.content and msg.content != discord_bot.user.mention) else [])
                     + ["\n".join(filter(None, (embed.title, embed.description, getattr(embed.footer, 'text', None)))) for embed in msg.embeds]
                     + [component.content for component in msg.components if getattr(component, "type", None) == discord.ComponentType.text_display]
-                    + [f"<{att.filename}>" for att in msg.attachments]
+                    + [f"[{att.filename}]" for att in msg.attachments]
                     + [resp.text for att, resp in zip(attachments, attachment_responses) if att.content_type.startswith("text")]
                 )
 
@@ -331,13 +330,13 @@ async def on_message(new_msg) -> None:
     # Channel history (fetched above the oldest message of reply chain)
     if history_enabled and len(messages) < max_messages and oldest_chain_msg is not None:
         try:
-            channel_history = [m async for m in new_msg.channel.history(before=oldest_chain_msg, limit=max_messages - len(messages))]
+            channel_history = [m async for m in new_msg.channel.history(before=oldest_chain_msg, limit=(max_messages - len(messages) + 2))] # 2 system messages
             messages.append(dict(role="system", content="Channel history ends here. Current conversation (reply chain) starts from the next message. Do not refer to any previous topics unless the user does. Revert behaviour to defaults defined in the system prompt."))
-            for hist_msg in channel_history:
-                hist_obj, hist_node = await format_message(hist_msg)
-                if hist_obj:
-                    messages.append(hist_obj)
-            messages.append(dict(role="system", content=f"Channel history starts here. Below are the latest messages in the #{new_msg.channel.name} channel. Ignore them unless the user directly refers to them."))
+            for msg in channel_history:
+                msg_dict, node = await format_message(msg)
+                if msg_dict:
+                    messages.append(msg_dict)
+            messages.append(dict(role="system", content="Channel history starts here. Below are the latest messages in the channel. Ignore them unless the user directly refers to them."))
         except Exception as e:
             logging.exception(f"Error fetching channel history: {e}")
 
