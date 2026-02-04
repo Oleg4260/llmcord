@@ -57,11 +57,10 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.presences = True
-activity = discord.CustomActivity(name=(config["status_message"] or "github.com/Oleg4260/llmcord")[:128])
+activity = discord.CustomActivity(name=(config.get("status_message") or "github.com/Oleg4260/llmcord")[:128])
 discord_bot = commands.Bot(intents=intents, activity=activity, command_prefix=None)
 
 httpx_client = httpx.AsyncClient()
-
 
 @dataclass
 class MsgNode:
@@ -99,17 +98,14 @@ async def clear(interaction: discord.Interaction):
 @discord_bot.tree.command(name="history", description="Toggle use of channel history.")
 async def history(interaction: discord.Interaction):
     global history_settings
-
     user = interaction.user
-    if user.id not in history_settings:
-        history_settings[user.id] = True
 
     await interaction.response.defer(ephemeral=True)
-    if not config["read_history"]:
+    if not config.get("read_history", False):
         await interaction.followup.send("Channel history is disabled in the configuration.", ephemeral=True)
         return
 
-    history_settings[user.id] = not(history_settings[user.id])
+    history_settings[user.id] = not history_settings.get(user.id, True)
     await interaction.followup.send(f"Channel history {'enabled' if history_settings[user.id] else 'disabled'} for user {user.name}.")
 
 @discord_bot.tree.command(name="model", description="View or switch the current model")
@@ -142,12 +138,12 @@ async def model_autocomplete(interaction: discord.Interaction, curr_str: str) ->
 
 @discord_bot.event
 async def on_ready() -> None:
-    global wiki_data
-    if config["use_wiki"]:
+    logging.info(f"Logged in as {discord_bot.user}.")
+    if await discord_bot.tree.sync():
+        logging.info("Commands synced.")
+
+    if config.get("use_wiki", False):
         download_wiki()
-    logging.info(f"Logged in as {discord_bot.user}")
-    await discord_bot.tree.sync()
-    logging.info("Commands synced.")
 
 @discord_bot.event
 async def on_message(new_msg) -> None:
@@ -156,13 +152,11 @@ async def on_message(new_msg) -> None:
 
     config = await asyncio.to_thread(get_config)
 
-    if config["use_wiki"] and new_msg.author.id == config["webhook_id"]:
+    if new_msg.author.id == config["webhook_id"] and config.get("use_wiki", False):
         logging.info("Webhook message received, updating wiki cache")
         download_wiki()
 
     is_dm = new_msg.channel.type == discord.ChannelType.private
-    if new_msg.author.id not in history_settings and config["read_history"]:
-        history_settings[new_msg.author.id] = True
 
     if (not is_dm and discord_bot.user not in new_msg.mentions) or new_msg.author.bot:
         return
@@ -202,12 +196,12 @@ async def on_message(new_msg) -> None:
 
     model_parameters = config["models"].get(provider_slash_model, None)
 
-    extra_headers = provider_config.get("extra_headers", None)
-    extra_query = provider_config.get("extra_query", None)
-    extra_body = (provider_config.get("extra_body", None) or {}) | (model_parameters or {}) or None
+    extra_headers = provider_config.get("extra_headers")
+    extra_query = provider_config.get("extra_query")
+    extra_body = (provider_config.get("extra_body") or {}) | (model_parameters or {}) or None
 
     accept_images = any(x in provider_slash_model.lower() for x in VISION_MODEL_TAGS)
-    accept_usernames = any(x in provider_slash_model.lower() for x in PROVIDERS_SUPPORTING_USERNAMES)
+    accept_usernames = any(provider_slash_model.lower().startswith(x) for x in PROVIDERS_SUPPORTING_USERNAMES)
 
     max_text = config.get("max_text", 100000)
     max_images = config.get("max_images", 5) if accept_images else 0
@@ -312,7 +306,7 @@ async def on_message(new_msg) -> None:
 
     # Build reply chain (from newest to oldest)
     messages = []
-    history_enabled = config["read_history"] and not is_dm and history_settings.get(new_msg.author.id, True)
+    history_enabled = config.get("read_history", False) and not is_dm and history_settings.get(new_msg.author.id, True)
     curr_msg = new_msg
     oldest_chain_msg = None
 
@@ -378,7 +372,7 @@ async def on_message(new_msg) -> None:
     else:
         system_prompt_extras.append(f"You are currently in a DM channel with user {new_msg.author.name}.")
     # Add content from wiki
-    if config["use_wiki"]:
+    if wiki_data:
         system_prompt_extras.append(f"Content of all wiki pages: {wiki_data}")
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
@@ -394,7 +388,6 @@ async def on_message(new_msg) -> None:
     response_msgs = []
     response_contents = []
     openai_kwargs = dict(model=model, messages=messages, stream=True, extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body)
-    extra_api_parameters = config["extra_api_parameters"]
     max_message_length = 2000
 
     try:
