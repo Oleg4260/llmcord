@@ -42,16 +42,16 @@ curr_model = next(iter(config["models"]))
 
 msg_nodes = {}
 last_task_time = 0
-wiki_data = []
+wiki_pages = []
 history_settings = {}
 
-def download_wiki():
-    global wiki_data
+async def fetch_wiki():
+    global wiki_pages
     try:
-        wiki_data = wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
-        logging.info(f"Wiki data received, {len(wiki_data)} articles downloaded.")
+        wiki_pages = await wiki.download_all_pages(config["wiki_url"],config["wiki_token"])
+        logging.info(f"Wiki fetched successfully, {len(wiki_pages)} pages loaded.")
     except Exception as e:
-        logging.error(f"Could not load wiki data: {e}")
+        logging.error(f"Could not fetch wiki pages: {e}")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -143,18 +143,18 @@ async def on_ready() -> None:
         logging.info("Commands synced.")
 
     if config.get("use_wiki", False):
-        download_wiki()
+        await fetch_wiki()
 
 @discord_bot.event
 async def on_message(new_msg) -> None:
 
-    global msg_nodes, last_task_time, wiki_data, history_settings
+    global msg_nodes, last_task_time, wiki_pages, history_settings
 
     config = await asyncio.to_thread(get_config)
 
     if new_msg.author.id == config["webhook_id"] and config.get("use_wiki", False):
-        logging.info("Webhook message received, updating wiki cache")
-        download_wiki()
+        logging.info("Webhook message received, refreshing wiki cache")
+        await fetch_wiki()
 
     is_dm = new_msg.channel.type == discord.ChannelType.private
 
@@ -372,8 +372,8 @@ async def on_message(new_msg) -> None:
     else:
         system_prompt_extras.append(f"You are currently in a DM channel with user {new_msg.author.name}.")
     # Add content from wiki
-    if wiki_data:
-        system_prompt_extras.append(f"Content of all wiki pages: {wiki_data}")
+    if wiki_pages:
+        system_prompt_extras.append(f"Wiki pages: {wiki_pages}")
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
 
