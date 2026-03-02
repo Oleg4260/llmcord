@@ -30,12 +30,9 @@ def get_config(filename: str = "config.yaml") -> dict[str, Any]:
 
 config = get_config()
 
-prompt_file = open(config["prompt_file"], "r")
-
 timezone = ZoneInfo(config["timezone"])
 
 bot_token = config["bot_token"]
-system_prompt = prompt_file.read()
 
 httpx_client = httpx.AsyncClient()
 curr_model = next(iter(config["models"]))
@@ -151,6 +148,9 @@ async def on_message(new_msg) -> None:
     global msg_nodes, last_task_time, wiki_pages, history_settings
 
     config = await asyncio.to_thread(get_config)
+
+    with open(config["prompt_file"], "r") as f:
+        system_prompt = f.read()
 
     if new_msg.author.id == config["webhook_id"] and config.get("use_wiki", False):
         logging.info("Webhook message received, refreshing wiki cache")
