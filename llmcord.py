@@ -224,7 +224,8 @@ async def on_message(new_msg) -> None:
                 except Exception:
                     msg_date_local = msg.created_at
 
-                formatted_message = f"{msg_date_local.strftime('%d.%m.%Y %H:%M')} {msg.author.name}: " + (msg.content or "")
+                cleaned_content = msg.content.removeprefix(discord_bot.user.mention).lstrip() if is_dm else msg.content # Remove bot mention if in DM
+                formatted_message = f"{msg_date_local.strftime('%d.%m.%Y %H:%M')} {msg.author.name}: " + cleaned_content
                 
                 attachments = []
                 for att in msg.attachments:
@@ -237,7 +238,7 @@ async def on_message(new_msg) -> None:
                     attachment_responses = await asyncio.gather(*[httpx_client.get(att.url) for att in attachments])
 
                 node.text = "\n".join(
-                    ([formatted_message] if (msg.content and msg.content != discord_bot.user.mention) else [])
+                    ([formatted_message] if msg.content != discord_bot.user.mention else [])
                     + ["\n".join(filter(None, (embed.title, embed.description, getattr(embed.footer, 'text', None)))) for embed in msg.embeds]
                     + [component.content for component in msg.components if getattr(component, "type", None) == discord.ComponentType.text_display]
                     + [f"[{att.filename}]" for att in msg.attachments]
