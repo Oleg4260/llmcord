@@ -20,7 +20,6 @@ logging.basicConfig(
 )
 
 VISION_MODEL_TAGS = ("claude", "gemini", "gemma", "gpt-4", "gpt-5", "grok-4", "llama", "llava", "mistral", "o3", "o4", "vision", "vl")
-PROVIDERS_SUPPORTING_USERNAMES = ("openai", "x-ai")
 
 MAX_MESSAGE_NODES = 1000
 
@@ -201,7 +200,6 @@ async def on_message(new_msg) -> None:
     extra_body = (provider_config.get("extra_body") or {}) | (model_parameters or {}) or None
 
     accept_images = any(x in provider_slash_model.lower() for x in VISION_MODEL_TAGS)
-    accept_usernames = any(provider_slash_model.lower().startswith(x) for x in PROVIDERS_SUPPORTING_USERNAMES)
 
     max_text = config.get("max_text", 100000)
     max_images = config.get("max_images", 5) if accept_images else 0
@@ -297,8 +295,6 @@ async def on_message(new_msg) -> None:
 
             if content != "":
                 message = dict(content=content, role=node.role)
-                if accept_usernames and node.user_id is not None:
-                    message["name"] = str(node.user_id)
             else:
                 message = None
 
