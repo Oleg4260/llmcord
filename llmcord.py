@@ -380,49 +380,103 @@ async def on_message(new_msg) -> None:
     #with open("history.txt", "w") as f:
     #    for msg in messages:
     #        f.write(f"[{msg['role']}]: {msg['content']}\n")
+
     # Generate and send response message(s) (can be multiple if response is long)
-    curr_content = finish_reason = None
-    response_msgs = []
-    response_contents = []
     openai_kwargs = dict(model=model, messages=messages, stream=True, extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body)
     max_message_length = 2000
 
-    try:
-        async with new_msg.channel.typing():
-            async for chunk in await openai_client.chat.completions.create(**openai_kwargs):
-                if finish_reason != None:
-                    break
+    max_retries = 10 if curr_model.endswith(":free") else 0
+    attempts = 0
+    status_msg = None
 
-                if not (choice := chunk.choices[0] if chunk.choices else None):
-                    continue
+    # Helper to check if user deleted their message
+    async def check_msg_deleted() -> bool:
+        try:
+            await new_msg.channel.fetch_message(new_msg.id)
+            return False
+        except discord.NotFound:
+            if status_msg:
+                try:
+                    await status_msg.delete()
+                except Exception:
+                    pass
+            return True
+        except Exception:
+            return False # Ignore temporary network/rate issues during the check
 
-                finish_reason = choice.finish_reason
+    while attempts <= max_retries:
+        # Check before even attempting to hit the API
+        if await check_msg_deleted():
+            break
 
-                prev_content = curr_content or ""
-                curr_content = choice.delta.content or ""
+        response_msgs = []
+        response_contents = [""]
+        
+        try:
+            async with new_msg.channel.typing():
+                async for chunk in await openai_client.chat.completions.create(**openai_kwargs):
+                    if not chunk.choices:
+                        continue
+                    choice = chunk.choices[0]
+                    content_delta = choice.delta.content or ""
+                    if not content_delta and not response_contents[0]:
+                        continue
+                    if len(response_contents[-1] + content_delta) > max_message_length:
+                        response_contents.append("")
+                    response_contents[-1] += content_delta
+                    if choice.finish_reason is not None:
+                        break
+                if not "".join(response_contents).strip():
+                    raise ValueError("Empty response from API")
 
-                new_content = prev_content if finish_reason == None else (prev_content + curr_content)
+            # Check right after generation completes, before sending response parts
+            if await check_msg_deleted():
+                break
 
-                if response_contents == [] and new_content == "":
-                    continue
+            # Send or edit messages
+            for i, content in enumerate(response_contents):
+                if i == 0 and status_msg:
+                    await status_msg.edit(content=content)
+                    response_msgs.append(status_msg)
+                else:
+                    reply_target = response_msgs[-1] if response_msgs else new_msg
+                    new_resp = await reply_target.reply(content=content, suppress_embeds=True)
+                    response_msgs.append(new_resp)
 
-                if start_next_msg := response_contents == [] or len(response_contents[-1] + new_content) > max_message_length:
-                    response_contents.append("")
+                msg_nodes[response_msgs[-1].id] = MsgNode(parent_msg=new_msg)
+                await msg_nodes[response_msgs[-1].id].lock.acquire()
 
-                response_contents[-1] += new_content
+            break
 
-            for content in response_contents:
-                reply_to_msg = new_msg if response_msgs == [] else response_msgs[-1]
-                response_msg = await reply_to_msg.reply(content=content, suppress_embeds=True)
-                response_msgs.append(response_msg)
+        except Exception as e:
+            # Check inside exception (catches edge-case where message was deleted exactly while the bot was trying to send/reply to it)
+            if await check_msg_deleted():
+                break
 
-                msg_nodes[response_msg.id] = MsgNode(parent_msg=new_msg)
-                await msg_nodes[response_msg.id].lock.acquire()
-
-    except Exception as e: # Catch the exception and assign it to variable 'e'
-        logging.exception("Error while generating response")
-        error_message = f"`{e}`"
-        await new_msg.reply(content=error_message, suppress_embeds=True)
+            error_str = str(e)
+            retryable_errors = ("429", "Internal Server Error", "Empty response from API")
+            
+            # Check if we should retry
+            if attempts < max_retries and any(err in error_str for err in retryable_errors):
+                attempts += 1
+                status_text = f"`{error_str}`\nRetrying {attempts}/{max_retries}..."
+                logging.warning(f"API error. Retrying {attempts}/{max_retries}... ({error_str})")
+                
+                if status_msg:
+                    await status_msg.edit(content=status_text)
+                else:
+                    status_msg = await new_msg.reply(content=status_text, suppress_embeds=True)
+                    
+                await asyncio.sleep(2)
+            else:
+                # Max retries hit, or it's a fatal/non-retryable error
+                error_message = f"`{error_str}`"
+                logging.exception(f"Error while generating response: {error_str}")
+                if status_msg:
+                    await status_msg.edit(content=error_message)
+                else:
+                    await new_msg.reply(content=error_message, suppress_embeds=True)
+                break
 
     for response_msg in response_msgs:
         msg_nodes[response_msg.id].text = "".join(response_contents)
