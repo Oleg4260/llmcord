@@ -70,27 +70,6 @@ class MsgNode:
 
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-
-@discord_bot.tree.command(name="clear", description="Delete all of the bot's messages in the current DM channel.")
-async def clear(interaction: discord.Interaction):
-    """Deletes all of the bot's messages in the current DM channel."""
-    if interaction.channel.type != discord.ChannelType.private:
-        await interaction.response.send_message("This command can only be used in DMs.", ephemeral=True)
-        return
-
-    await interaction.response.defer(ephemeral=True, thinking=True)
-    
-    deleted_count = 0
-    async for message in interaction.channel.history(limit=None):
-        if message.author == discord_bot.user:
-            try:
-                await message.delete()
-                deleted_count += 1
-            except discord.HTTPException as e:
-                logging.error(f"Failed to delete message {message.id}: {e}")
-
-    await interaction.followup.send(f"Successfully deleted {deleted_count} bot message(s).")
-
 @discord_bot.tree.command(name="history", description="Toggle use of channel history.")
 async def history(interaction: discord.Interaction):
     global history_settings
