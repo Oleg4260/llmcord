@@ -312,9 +312,21 @@ async def on_message(new_msg) -> None:
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{messages[0]["content"]}")
 
-    # Get info about members in the channel
     members_list = []
+    roles_list = []
     if not is_dm:
+        # Get list of roles in the server 
+        for role in getattr(new_msg.guild, "roles", []):
+            if len(role.members) > 0 and not role.is_bot_managed() and not role.is_default():
+                role_info = {
+                    "name":role.name,
+                    "id":role.id,
+                    "color":str(role.color),
+                    "created_at":str(role.created_at),
+                    "members":len(role.members)
+                }
+                roles_list.append(f"{role_info}")
+        # Get list of users in the channel
         for member in new_msg.guild.members:
             if new_msg.channel.permissions_for(member).read_messages and (member == discord_bot.user or not member.bot):
                 member_info = {
@@ -324,14 +336,11 @@ async def on_message(new_msg) -> None:
                     "global_name":member.global_name,
                     "status": str(member.status),
                     "activities": [str(activity) for activity in member.activities],
-                    "roles": [
-                        {"name":role.name, "id":role.id, "color":str(role.color)}
-                        for role in member.roles[1:] # Remove @everyone
-                    ],
+                    "roles": [ role.id for role in member.roles[1:] ], # Remove @everyone
                     "created_at":str(member.created_at),
                     "joined_at":str(member.joined_at)
                 }
-                members_list.append(member_info)
+                members_list.append(f"{member_info}")
     # Make emojis list
     emojis_list = [f"<{'a' if e.animated else ''}:{e.name}:{e.id}>" for e in discord_bot.emojis]
     # Add extras to system prompt
@@ -344,7 +353,8 @@ async def on_message(new_msg) -> None:
         if not history_enabled:
             system_prompt_extras.append("Access to channel history is disabled. Only current conversation is visible.")
         system_prompt_extras.append(f"Server name: {new_msg.guild.name}, Channel name: {new_msg.channel.name}, Channel topic: {new_msg.channel.topic}")
-        system_prompt_extras.append(f"Users in the channel: {members_list}")
+        system_prompt_extras.append(f"Roles in the server:{roles_list}")
+        system_prompt_extras.append(f"Users in the channel:{members_list}")
     else:
         system_prompt_extras.append(f"You are currently in a DM channel with user {new_msg.author.name}.")
     # Add content from wiki
@@ -359,8 +369,8 @@ async def on_message(new_msg) -> None:
     #with open("history.txt", "w") as f:
     #    for msg in messages:
     #        f.write(f"[{msg['role']}]: {msg['content']}\n")
-
-    # Generate and send response message(s) (can be multiple if response is long)
+    
+    # Generate and send response message(s) (can be multiple if response is long) 
     openai_kwargs = dict(model=model, messages=messages, stream=True, extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body)
     max_message_length = 2000
 
