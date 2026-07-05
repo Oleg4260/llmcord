@@ -347,7 +347,7 @@ async def on_message(new_msg) -> None:
     system_prompt_extras = [
         f"Current date and time ({str(timezone)}): {dt.datetime.now(timezone).strftime('%b %-d %Y %H:%M:%S')}",
         f"Current model: {curr_model}",
-        f"Custom emojis available: {emojis_list}"
+        f"Custom emojis available: {' '.join(emojis_list) if emojis_list else 'None'}"
         ]
     if not is_dm:
         if not history_enabled:
@@ -360,6 +360,7 @@ async def on_message(new_msg) -> None:
     # Add content from wiki
     if wiki_pages:
         system_prompt_extras.append(f"Wiki pages: {wiki_pages}")
+    
     full_system_prompt = "\n".join([system_prompt] + system_prompt_extras)
     messages.append(dict(role="system", content=full_system_prompt))
 
