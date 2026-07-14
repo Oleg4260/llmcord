@@ -29,8 +29,6 @@ def get_config(filename: str = "config.yaml") -> dict[str, Any]:
 
 config = get_config()
 
-timezone = ZoneInfo(config["timezone"])
-
 bot_token = config["bot_token"]
 
 httpx_client = httpx.AsyncClient()
@@ -186,6 +184,11 @@ async def on_message(new_msg) -> None:
 
     attachment_whitelist = ("text", "image") if accept_images else ("text")
 
+    timezone = ZoneInfo(config["timezone"])
+
+    async def make_message_prefix(datetime: dt.datetime, user: discord.User):
+        return f"{datetime.strftime('%d.%m.%Y %H:%M')} {user.name}: "
+
     async def format_message(msg: discord.Message):
         """
         Given a discord.Message, return a tuple:
@@ -198,13 +201,9 @@ async def on_message(new_msg) -> None:
 
         async with node.lock:
             if node.text is None:
-                try:
-                    msg_date_local = msg.created_at.replace(tzinfo=dt.timezone.utc).astimezone(timezone)
-                except Exception:
-                    msg_date_local = msg.created_at
-
+                msg_date_local = msg.created_at.replace(tzinfo=dt.timezone.utc).astimezone(timezone)
                 cleaned_content = msg.content.removeprefix(discord_bot.user.mention).lstrip() if is_dm else msg.content # Remove bot mention if in DM
-                formatted_message = f"{msg_date_local.strftime('%d.%m.%Y %H:%M')} {msg.author.name}: " + cleaned_content
+                formatted_message = await make_message_prefix(msg_date_local, msg.author) + cleaned_content
                 
                 attachments = []
                 for att in msg.attachments:
@@ -280,12 +279,16 @@ async def on_message(new_msg) -> None:
 
         return message, node
 
-    # Build reply chain (from newest to oldest)
+    # Build message chain
     messages = []
     history_enabled = config.get("read_history", False) and not is_dm and history_settings.get(new_msg.author.id, True)
     curr_msg = new_msg
     oldest_chain_msg = None
 
+    # Add bot message prefix to prevent the model from hallucinating that the bot is a human user or generating the prefix in the reply
+    messages.append(dict(role="assistant", content=await make_message_prefix(dt.datetime.now(timezone), discord_bot.user)))
+
+    # Reply chain from newest to oldest
     while curr_msg is not None and len(messages) < max_messages:
         msg_dict, node = await format_message(curr_msg)
 
@@ -297,7 +300,7 @@ async def on_message(new_msg) -> None:
 
         curr_msg = node.parent_msg
 
-    # Channel history (fetched above the oldest message of reply chain)
+    # Channel history (fetched above the oldest message of reply chain) 
     if history_enabled and len(messages) < max_messages and oldest_chain_msg is not None:
         try:
             channel_history = [m async for m in new_msg.channel.history(before=oldest_chain_msg, limit=(max_messages - len(messages) + 2))] # 2 system messages
@@ -310,7 +313,7 @@ async def on_message(new_msg) -> None:
         except Exception as e:
             logging.exception(f"Error fetching channel history: {e}")
 
-    logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{messages[0]["content"]}")
+    logging.info(f"Message received (username/ID: {new_msg.author.name}/{new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
 
     members_list = []
     roles_list = []
