@@ -115,9 +115,6 @@ async def on_ready() -> None:
     if await discord_bot.tree.sync():
         logging.info("Commands synced.")
 
-    if config.get("use_wiki", False):
-        await fetch_wiki()
-
 @discord_bot.event
 async def on_message(new_msg) -> None:
 
@@ -489,6 +486,9 @@ async def on_message(new_msg) -> None:
                 msg_nodes.pop(msg_id, None)
 
 async def main() -> None:
+    if config.get("use_wiki", False):
+        await fetch_wiki()
+
     await discord_bot.start(config["bot_token"])
 
 try:
