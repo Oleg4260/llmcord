@@ -381,6 +381,7 @@ async def on_message(new_msg) -> None:
     max_retries = 10 if curr_model.endswith(":free") else 0
     attempts = 0
     status_msg = None
+    last_err = None
 
     # Helper to check if user deleted their message
     async def check_msg_deleted() -> bool:
@@ -448,6 +449,10 @@ async def on_message(new_msg) -> None:
 
             error_str = str(e)
             retryable_errors = ("429", "Internal Server Error", "Empty response from API")
+
+            # Add more attempts if the error is different
+            if error_str != last_err:
+                max_retries += 1
             
             # Check if we should retry
             if attempts < max_retries and any(err in error_str for err in retryable_errors):
@@ -470,6 +475,8 @@ async def on_message(new_msg) -> None:
                 else:
                     await new_msg.reply(content=error_message, suppress_embeds=True)
                 break
+            
+            last_err = error_str
 
     for response_msg in response_msgs:
         msg_nodes[response_msg.id].text = "".join(response_contents)
