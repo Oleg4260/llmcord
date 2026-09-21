@@ -448,7 +448,7 @@ async def on_message(new_msg) -> None:
             retryable_errors = ("429", "Internal Server Error", "Empty response from API")
 
             # Add more attempts if the error is different
-            if error_str != last_err:
+            if error_str != last_err and last_err is not None:
                 max_retries += 1
             
             # Check if we should retry
